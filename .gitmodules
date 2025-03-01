@@ -1,0 +1,3 @@
+[submodule "OMO/OMO/banksimulation"]
+	path = OMO/OMO/banksimulation
+	url = https://gitlab.fel.cvut.cz/biriuolg/banksimulation
