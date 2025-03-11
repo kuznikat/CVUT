@@ -17,3 +17,5 @@ TS1 - Software testing;
 OMO- Object Modelling and Programming;
 
 DBS - DataBase Systems;
+
+PSI - Computer Networks
