@@ -4,8 +4,6 @@ At this repository you can find projects that I realized within the subjects dur
 
 SMP - Analysis and Modeling of Software Requirements;
 
-ISP - Business Process Management;
-
 INS - Information Systems;
 
 ZAL - Basics algorithmis in Python;
