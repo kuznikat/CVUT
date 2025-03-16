@@ -1,7 +1,7 @@
 package nss.cviceni2.client;
 
+
 import java.io.FileReader;
-import java.rmi.RMISecurityManager;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
@@ -9,6 +9,10 @@ import java.util.Arrays;
 
 import nss.cviceni2.compute.ServerInterface;
 import nss.cviceni2.server.CsvReader;
+import java.io.FileNotFoundException;
+import java.rmi.RMISecurityManager;
+import nss.cviceni2.compute.ServerInterface;
+
 
 public class Client {
 
@@ -129,8 +133,6 @@ public class Client {
 					System.err.println("<< ERROR executing command: " + command + " - " + e.getMessage());
 				}
 			}
-		} catch (Exception e) {
-			System.err.println("Data exception: " + e.getMessage());
-		}
+
 	}
 }
