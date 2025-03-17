@@ -71,27 +71,6 @@ public class Client {
 								System.out.println("<< ERROR - provide Database name");
 							}
 							break;
-//						case "insert":
-//							if(content.length > 3){
-//								String dbName = content[1].trim();
-//								String dbId = content[2].trim();
-//								String dbData = content[3].trim();
-//								System.out.println(">> Inserting into database \"" + dbName + "\" record [\"" + dbId + "\";\"" + dbData + "\"]");
-//                                Integer inserted = null;
-//                                try {
-//                                    inserted = serveri.insert(dbName, Integer.valueOf(dbId), dbData);
-//                                } catch (RemoteException ex) {
-//                                    throw new RuntimeException(ex);
-//                                }
-//                                if (inserted != null ) {
-//									System.out.println("<< DB \"" + dbName + "\" - record inserted");
-//								} else {
-//									System.out.println("<< ERROR - Database \"" + dbName + "\" does not exist");
-//								}
-//							} else {
-//								System.err.println("<< ERROR - Incorrect 'insert' syntax");
-//							}
-//							break;
 						case "insert":
 							System.out.println("Processing insert: " + Arrays.toString(content));
 							if (content.length >=3) {
