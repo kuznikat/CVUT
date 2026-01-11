@@ -1,0 +1,1 @@
+/usr/bin/c++  -Wall -Wextra -pedantic -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/test_snake.dir/tests/test_game.cpp.o CMakeFiles/test_snake.dir/src/game.cpp.o CMakeFiles/test_snake.dir/src/terminal.cpp.o -o test_snake
