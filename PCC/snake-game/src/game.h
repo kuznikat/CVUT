@@ -6,7 +6,6 @@
 #include <condition_variable>
 #include <atomic>
 #include <random>
-#include <cstdint>
 
 struct Position {
     int x, y;

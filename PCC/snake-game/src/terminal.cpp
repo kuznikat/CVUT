@@ -1,6 +1,5 @@
 #include "terminal.h"
 #include <sys/ioctl.h>
-#include <fcntl.h>
 #include <cstring>
 
 Terminal::Terminal() : raw_mode_enabled(false) {
