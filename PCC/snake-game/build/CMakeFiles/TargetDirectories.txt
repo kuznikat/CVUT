@@ -1,0 +1,5 @@
+/Users/katerynakuznietsova/Desktop/5 semestr/PCC/Semestral/build/CMakeFiles/snake.dir
+/Users/katerynakuznietsova/Desktop/5 semestr/PCC/Semestral/build/CMakeFiles/test_snake.dir
+/Users/katerynakuznietsova/Desktop/5 semestr/PCC/Semestral/build/CMakeFiles/test.dir
+/Users/katerynakuznietsova/Desktop/5 semestr/PCC/Semestral/build/CMakeFiles/edit_cache.dir
+/Users/katerynakuznietsova/Desktop/5 semestr/PCC/Semestral/build/CMakeFiles/rebuild_cache.dir

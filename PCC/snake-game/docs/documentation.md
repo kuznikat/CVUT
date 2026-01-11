@@ -346,6 +346,7 @@ make
 
 ### Difficulty Level Comparison
 
+
 The game implements two difficulty levels with different algorithms for game speed:
 
 #### Easy Difficulty Algorithm
@@ -435,4 +436,112 @@ Potential improvements:
 - ANSI Escape Sequences: ECMA-48 standard
 - C++17 Standard: ISO/IEC 14882:2017
 - CMake Documentation: https://cmake.org/documentation/
+=======
+#### Easy Difficulty
+- **Update Interval**: ~200ms per game tick
+- **Characteristics**: 
+  - Slower snake movement
+  - More time to react
+  - Easier for beginners
+  - Lower risk of self-collision
 
+#### Hard Difficulty
+- **Update Interval**: ~100ms per game tick
+- **Characteristics**: 
+  - Faster snake movement
+  - Requires quick reflexes
+  - More challenging gameplay
+  - Higher risk of mistakes
+
+**Trade-offs**: 
+- Easy mode provides better control but less excitement
+- Hard mode is more challenging but requires more skill
+
+### Algorithm Performance Analysis
+
+#### Snake Movement Algorithm
+- **Time Complexity**: O(1) for movement, O(n) for rendering
+- **Space Complexity**: O(n) where n is snake length
+- **Optimization**: Using `std::vector` for efficient insertion/deletion at ends
+
+#### Collision Detection Algorithm
+- **Time Complexity**: O(n) for self-collision check
+- **Optimization Potential**: Could use spatial hashing for O(1) average case, but current O(n) is acceptable for typical snake lengths (< 100 segments)
+
+#### Fruit Spawning Algorithm
+- **Time Complexity**: O(n) worst case, O(1) average case
+- **Optimization**: Retry limit prevents infinite loops on full board
+
+### Threading Approach Comparison
+
+#### Current Implementation (Three-Thread Model)
+- **Advantages**:
+  - Clear separation of concerns
+  - Responsive input handling
+  - Smooth rendering independent of game logic
+  - Better resource utilization
+
+- **Disadvantages**:
+  - More complex synchronization
+  - Potential for race conditions if not careful
+  - Slightly higher memory overhead
+
+#### Alternative: Single-Thread Model
+- **Advantages**:
+  - Simpler implementation
+  - No synchronization overhead
+  - Easier to debug
+
+- **Disadvantages**:
+  - Input blocking can affect rendering
+  - Less responsive
+  - Poor resource utilization
+
+**Conclusion**: The three-thread model provides better user experience and responsiveness, justifying the added complexity.
+
+### Synchronization Strategy Comparison
+
+#### Mutex-Based Locking (Current)
+- **Advantages**:
+  - Simple to understand
+  - Prevents race conditions
+  - Standard C++17 support
+
+- **Performance**: Minimal overhead for this use case
+
+#### Lock-Free Approach (Alternative)
+- **Advantages**:
+  - Potentially faster
+  - No blocking
+
+- **Disadvantages**:
+  - More complex to implement correctly
+  - Requires careful memory ordering
+  - May not provide significant benefit for this application
+
+**Conclusion**: Mutex-based approach is appropriate for this game's synchronization needs, providing safety with acceptable performance.
+
+---
+
+## Additional Notes
+
+### Language Extensions Used
+
+1. **POSIX Extensions**:
+   - `termios.h`: Terminal control
+   - `sys/ioctl.h`: Terminal size detection
+   - `unistd.h`: File I/O operations
+
+2. **C++17 Features**:
+   - `std::atomic`: Atomic operations for flags
+   - `std::mutex`: Mutex for synchronization
+   - `std::condition_variable`: Condition variables for notifications
+   - `std::thread`: Thread management
+
+3. **C99 Extensions**:
+   - Variable Length Arrays (VLA) in render.cpp
+
+### Non-Portable Dependencies
+
+- **POSIX**: Required for terminal control and I/O
+- **pthread**: Required for threading support (via C++ std::thread)

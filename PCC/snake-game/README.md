@@ -21,6 +21,11 @@ A classic Snake game implementation in C++ using POSIX terminals with multi-thre
 
 ## Building
 
+### Using the build script:
+```bash
+./build.sh
+
+### Manual build:
 ```bash
 mkdir build
 cd build
@@ -32,17 +37,24 @@ make
 
 ```bash
 # Run with default settings (Easy difficulty, 40x20)
-./snake
+
+./build/snake
 
 # Run with custom difficulty
-./snake --difficulty hard
+./build/snake --difficulty hard
 
 # Run with custom size
-./snake --width 50 --height 25
+./build/snake --width 50 --height 25
 
 # Show help
-./snake --help
-```
+./build/snake --help
+
+## Command-Line Options
+
+- `--help` or `-h`: Display help message with usage information
+- `--difficulty <level>` or `-d <level>`: Set difficulty level (`easy` or `hard`)
+- `--width <n>` or `-w <n>`: Set game board width (default: 40)
+- `--height <n>` or `-h <n>`: Set game board height (default: 20)
 
 ## Controls
 
@@ -87,9 +99,10 @@ Threads communicate through a shared `Game` object protected by mutexes and cond
 ## Project Structure
 
 ```
-Semestral/
+snake-game/
 ├── CMakeLists.txt          # Build configuration
 ├── README.md               # This file
+├── build.sh                # Build script
 ├── docs/
 │   └── documentation.md    # Detailed documentation
 ├── src/
@@ -107,12 +120,14 @@ Semestral/
 - **POSIX**: Terminal control, file I/O
 - **pthread**: Threading support
 - **C++17**: Modern C++ features (atomic, mutex, condition_variable)
+- **VLA (C99)**: Variable Length Arrays in render.cpp
 
 ## Memory Checking
 
 To check for memory leaks using valgrind:
 
 ```bash
+cd build
 valgrind --leak-check=full --show-leak-kinds=all ./snake
 ```
 
@@ -123,6 +138,5 @@ See `docs/documentation.md` for detailed documentation including:
 - Thread synchronization details
 - Testing procedures
 - Code structure
-
-
+- Algorithm descriptions
 
