@@ -1,572 +1,442 @@
-# Snake Game - Detailed Documentation
+# Snake Game - Technical Documentation
 
-**Commit Hash**: [TODO: Fill in commit hash after first commit]
+## Overview
 
-## Table of Contents
+This document provides detailed technical documentation for the Snake Game semester project. The game is implemented in C++17 using a multi-threaded architecture with POSIX terminal control.
 
-1. [Description of Implemented Algorithms](#description-of-implemented-algorithms)
-2. [Description of Solution Process](#description-of-solution-process)
-3. [How to Compile and Run](#how-to-compile-and-run)
-4. [Command-Line Switches Description](#command-line-switches-description)
-5. [How to Use the Application](#how-to-use-the-application)
-6. [Program Testing](#program-testing)
-7. [Comparison of Implemented Algorithms](#comparison-of-implemented-algorithms)
+## Architecture
 
----
+### Thread Architecture
+
+The application uses three threads that communicate through a shared game state:
+
+1. **Input Thread** (`InputThread`)
+   - Reads keyboard input in non-blocking mode
+   - Processes movement commands (W/A/S/D)
+   - Handles pause (P) and quit (Q/ESC) commands
+   - Updates game direction atomically
+
+2. **Render Thread** (`RenderThread`)
+   - Continuously renders the game state
+   - Uses ANSI escape sequences for terminal graphics
+   - Updates at ~60 FPS
+   - Displays game border, snake, fruit, and UI
+
+3. **Main Thread** (Game Logic)
+   - Manages game state updates
+   - Handles collision detection
+   - Controls game timing based on difficulty
+   - Coordinates thread lifecycle
+
+### Thread Synchronization
+
+Thread synchronization is achieved using:
+
+- **`std::mutex`**: Protects shared game state
+- **`std::condition_variable`**: Notifies render thread of state changes
+- **`std::atomic`**: For game state and direction (lock-free operations)
+
+### Class Structure
+
+#### `Game` Class
+
+The core game logic class that maintains:
+- Snake position (vector of `Position`)
+- Fruit position
+- Score
+- Game state (RUNNING, PAUSED, GAME_OVER, QUIT)
+- Current and next direction
+
+**Thread Safety**: All public methods are thread-safe when used with the provided mutex.
+
+#### `Terminal` Class
+
+Handles terminal operations:
+- Raw mode enable/disable
+- ANSI escape sequence output
+- Terminal size detection
+- Non-blocking character input
+
+#### `InputThread` Class
+
+Manages keyboard input in a separate thread:
+- Reads characters in non-blocking mode
+- Maps keys to game actions
+- Prevents direction reversal
+
+#### `RenderThread` Class
+
+Handles game rendering:
+- Clears and redraws screen
+- Draws game border, snake, and fruit
+- Displays score and game state messages
 
 ## Description of Implemented Algorithms
 
 ### Snake Movement Algorithm
 
-The snake movement is implemented using a queue-based data structure where the snake's body is represented as a sequence of coordinates. The algorithm works as follows:
+The snake movement algorithm follows these steps:
 
-1. **Direction Update**: The current direction is stored and can be changed by user input (W/A/S/D keys)
-2. **Head Movement**: Calculate the new head position based on current direction:
-   - Up (W): `(x, y-1)`
-   - Down (S): `(x, y+1)`
-   - Left (A): `(x-1, y)`
-   - Right (D): `(x+1, y)`
-3. **Body Update**: Add the new head position to the front of the snake body
-4. **Tail Management**: If no fruit was eaten, remove the tail segment; otherwise, keep the tail (snake grows)
+1. **Direction Queuing**: Direction changes are queued via `setDirection()` to prevent immediate reversal into the snake's body
+2. **Position Calculation**: On each game tick (`update()`), the new head position is calculated based on current direction:
+   - UP: `y = y - 1`
+   - DOWN: `y = y + 1`
+   - LEFT: `x = x - 1`
+   - RIGHT: `x = x + 1`
+3. **Collision Check**: Before applying movement, collision is checked (walls and self)
+4. **Snake Growth**: If fruit is eaten, new head is added without removing tail; otherwise, tail is removed
+5. **State Update**: Game state is updated (RUNNING, GAME_OVER, etc.)
 
-**Time Complexity**: O(1) for movement, O(n) for rendering where n is the snake length
+**Time Complexity**: O(1) for movement, O(n) for collision check where n is snake length
 
 ### Collision Detection Algorithm
 
-Collision detection is performed after each movement:
+The collision detection uses a two-phase approach:
 
-1. **Wall Collision**: Check if the new head position is outside the game boundaries:
-   ```
-   if (head_x < 0 || head_x >= width || head_y < 0 || head_y >= height)
-       → Game Over
-   ```
-2. **Self Collision**: Check if the new head position overlaps with any body segment:
-   ```
-   for each segment in snake_body (except head):
-       if (head_position == segment_position)
-           → Game Over
-   ```
-3. **Fruit Collision**: Check if the head position matches the fruit position:
-   ```
-   if (head_position == fruit_position)
-       → Increase score, spawn new fruit, grow snake
-   ```
+1. **Wall Collision** (O(1)):
+   - Check if head position `(x, y)` satisfies: `x < 0 || x >= width || y < 0 || y >= height`
+   - Immediate return if collision detected
 
-**Time Complexity**: O(n) where n is the snake length (for self-collision check)
+2. **Self Collision** (O(n)):
+   - Linear search through snake body segments (excluding head)
+   - Compare each segment position with head position
+   - Early termination when collision found
+
+**Algorithm Efficiency**: O(n) worst case, O(1) best case (wall collision)
 
 ### Fruit Spawning Algorithm
 
-Fruits are spawned at random positions that are not occupied by the snake:
+The fruit spawning uses a random placement algorithm:
 
-1. **Random Position Generation**: Generate random coordinates within game boundaries
-2. **Collision Check**: Verify the position is not occupied by any snake segment
-3. **Retry Logic**: If collision detected, generate new random position (up to maximum retries)
-4. **Placement**: Set fruit position to the valid random coordinate
+1. Generate random position using Mersenne Twister RNG
+2. Check if position overlaps with snake body
+3. If overlap, regenerate (maximum 100 attempts)
+4. Place fruit at valid position
 
-**Time Complexity**: O(n) in worst case where n is snake length, but typically O(1) with low collision probability
+**Time Complexity**: O(1) average case, O(100) worst case
 
 ### Thread Synchronization Algorithm
 
-The game uses a multi-threaded architecture with three threads that need to synchronize:
+The multi-threaded architecture uses:
 
-1. **Shared State Protection**: The `Game` object is protected by a mutex (`std::mutex`)
-2. **Condition Variables**: Used to notify threads of state changes:
-   - Input thread notifies when direction changes
-   - Main thread notifies when game state updates
-   - Render thread waits for update notifications
-3. **Atomic Operations**: Frequently accessed flags (like `isRunning`, `isPaused`) use `std::atomic` for lock-free access
-4. **Lock Strategy**:
-   - Input thread: Acquires lock only when updating direction
-   - Main thread: Acquires lock for game state updates
-   - Render thread: Acquires lock when reading game state for rendering
-
-**Synchronization Pattern**:
-```
-Input Thread:  [Lock] → Update Direction → [Unlock] → Notify
-Main Thread:   [Lock] → Update Game State → [Unlock] → Notify
-Render Thread: [Lock] → Read Game State → Render → [Unlock]
-```
-
----
+1. **Mutex Locking**: All game state access protected by `std::mutex`
+2. **Condition Variables**: Render thread waits on state changes
+3. **Atomic Operations**: Game state and direction use `std::atomic` for lock-free reads
+4. **Producer-Consumer Pattern**: Input thread produces commands, game thread consumes
 
 ## Description of Solution Process
 
-### Architecture Overview
+### Implemented Classes and Methods
 
-The solution follows a multi-threaded architecture with clear separation of concerns:
+#### `Game` Class
 
-- **Game Logic**: Centralized in the `Game` class
-- **Input Handling**: Isolated in `InputThread` class
-- **Rendering**: Isolated in `RenderThread` class
-- **Terminal Management**: Abstracted in `Terminal` class
-
-### Class Descriptions
-
-#### Game Class (`game.h`/`game.cpp`)
-
-The core game logic class that manages the game state.
+**Purpose**: Core game logic and state management
 
 **Key Methods**:
-- `Game(int width, int height, Difficulty difficulty)`: Constructor initializes game board
-- `void update()`: Updates game state (movement, collision, scoring)
-- `void changeDirection(Direction dir)`: Changes snake direction (thread-safe)
-- `bool isGameOver() const`: Returns game over status
-- `int getScore() const`: Returns current score
-- `void pause()`: Toggles pause state
-- `void spawnFruit()`: Spawns a new fruit at random position
+- `Game(int width, int height, Difficulty difficulty)`: Constructor initializes game with specified dimensions and difficulty
+- `void update()`: Main game loop - updates snake position, checks collisions, handles fruit eating
+- `void setDirection(Direction dir)`: Sets next direction (prevents reversal)
+- `void spawnFruit()`: Places fruit at random valid position
+- `GameState getState() const`: Returns current game state (thread-safe)
+- `void setState(GameState state)`: Sets game state and notifies waiting threads
+- `bool checkCollision() const`: Checks for wall and self collisions
+- `Position getRandomPosition()`: Generates random position using VLA for buffer allocation
 
-**Data Members**:
-- `std::vector<Position> snake`: Snake body segments
-- `Position fruit`: Current fruit position
-- `Direction direction`: Current movement direction
-- `int score`: Current score
-- `bool gameOver`: Game over flag
-- `bool paused`: Pause state
-- `std::mutex mtx`: Mutex for thread synchronization
-- `std::condition_variable cv`: Condition variable for notifications
+**Thread Safety**: All methods are thread-safe when used with `gameMutex`
 
-#### Terminal Class (`terminal.h`/`terminal.cpp`)
+#### `Terminal` Class
 
-Manages terminal I/O operations and terminal mode settings.
+**Purpose**: POSIX terminal control and ANSI escape sequence handling
 
 **Key Methods**:
-- `Terminal()`: Constructor sets up terminal in raw mode
-- `~Terminal()`: Destructor restores terminal to normal mode
-- `void clearScreen()`: Clears the terminal screen
-- `void setCursor(int x, int y)`: Moves cursor to position
-- `void hideCursor()`: Hides the cursor
-- `void showCursor()`: Shows the cursor
-- `std::pair<int, int> getSize()`: Gets terminal dimensions
-- `char readChar()`: Reads a single character (non-blocking)
+- `void enableRawMode()`: Switches terminal to raw mode for non-blocking input
+- `void disableRawMode()`: Restores terminal to original mode (RAII cleanup)
+- `static void clearScreen()`: Clears terminal using ANSI escape sequence
+- `static void moveCursor(int row, int col)`: Moves cursor to specified position
+- `char readChar()`: Reads single character in non-blocking mode
+- `static int getWidth()/getHeight()`: Gets terminal dimensions using `ioctl`
 
-**POSIX Features Used**:
-- `termios.h`: Terminal control structure
-- `sys/ioctl.h`: Terminal size detection
-- `unistd.h`: File I/O operations
+#### `InputThread` Class
 
-#### InputThread Class (`input.h`/`input.cpp`)
-
-Handles keyboard input in a separate thread.
+**Purpose**: Handles keyboard input in separate thread
 
 **Key Methods**:
-- `InputThread(Game& game, Terminal& terminal)`: Constructor
-- `void start()`: Starts the input thread
-- `void stop()`: Stops the input thread
-- `void run()`: Main input loop (runs in separate thread)
+- `void start()`: Starts input thread
+- `void inputLoop()`: Main input processing loop
+  - Reads characters non-blocking
+  - Maps W/A/S/D to directions
+  - Handles P (pause) and Q/ESC (quit)
+  - Updates game direction atomically
 
-**Thread Behavior**:
-- Continuously reads keyboard input
-- Maps keys to game actions:
-  - W/A/S/D → Direction changes
-  - P → Pause toggle
-  - Q/ESC → Quit game
-- Updates game state in a thread-safe manner
+#### `RenderThread` Class
 
-#### RenderThread Class (`render.h`/`render.cpp`)
-
-Handles game rendering in a separate thread.
+**Purpose**: Handles game rendering in separate thread
 
 **Key Methods**:
-- `RenderThread(Game& game, Terminal& terminal)`: Constructor
-- `void start()`: Starts the render thread
-- `void stop()`: Stops the render thread
-- `void run()`: Main render loop (runs in separate thread)
+- `void start()`: Starts render thread
+- `void renderLoop()`: Main rendering loop (~60 FPS)
+- `void drawGame()`: Orchestrates drawing of all game elements
+- `void drawBorder()`: Draws game border using ANSI sequences
+- `void drawSnake()`: Draws snake body (head as 'O', body as 'o')
+- `void drawFruit()`: Draws fruit as '*'
+- `void drawUI()`: Displays score, difficulty, and controls
 
-**Rendering Features**:
-- Uses ANSI escape sequences for colors and positioning
-- Renders game board with borders
-- Displays snake, fruit, and score
-- Updates at regular intervals (frame rate control)
+### Game Logic
 
-**VLA Usage**: Uses Variable Length Arrays (C99 extension) for temporary rendering buffers.
+The game logic follows these steps:
 
-### Solution Process
-
-1. **Initialization Phase**:
-   - Parse command-line arguments
-   - Initialize Terminal object (sets raw mode)
-   - Create Game object with specified parameters
-   - Create InputThread and RenderThread objects
-
-2. **Thread Startup**:
-   - Start InputThread (begins reading input)
-   - Start RenderThread (begins rendering)
-   - Main thread enters game loop
-
-3. **Game Loop (Main Thread)**:
-   - Wait for game tick interval (based on difficulty)
-   - Acquire lock on Game object
+1. **Initialization**: Create game with default or specified parameters
+2. **Thread Creation**: Start input and render threads
+3. **Game Loop** (Main Thread):
+   - Wait for game state to be RUNNING
    - Call `game.update()` to advance game state
-   - Release lock and notify waiting threads
-   - Check for game over condition
+   - Sleep based on difficulty (200ms Easy, 100ms Hard)
+4. **Input Processing** (Input Thread):
+   - Continuously read keyboard input
+   - Update direction or game state
+5. **Rendering** (Render Thread):
+   - Wait for state changes or timeout
+   - Redraw entire game screen
+   - Display game state messages
 
-4. **Cleanup Phase**:
-   - Stop InputThread and RenderThread
-   - Join threads
-   - Restore terminal to normal mode
-   - Display final score
+### Difficulty Levels
 
----
+- **Easy**: 200ms update interval (slower, easier)
+- **Hard**: 100ms update interval (faster, more challenging)
 
-## How to Compile and Run
+## POSIX Features Used
 
-### Prerequisites
+1. **Terminal Control**:
+   - `termios.h`: Raw mode terminal configuration
+   - `sys/ioctl.h`: Terminal size detection
+   - `unistd.h`: File I/O operations
 
-- C++17 compatible compiler (g++ or clang++)
-- CMake 3.10 or higher
-- POSIX-compatible system (Linux, macOS, or WSL)
-- pthread library (usually included with system)
+2. **Threading**:
+   - `pthread`: Thread support (via C++ std::thread which uses pthread on POSIX)
 
-### Compilation Steps
+3. **ANSI Escape Sequences**:
+   - Screen clearing: `\033[2J`
+   - Cursor positioning: `\033[row;colH`
+   - Color codes: `\033[31m` (red), `\033[32m` (green), etc.
+   - Cursor visibility: `\033[?25l/h`
 
-#### Method 1: Using Build Script
+## Testing
+
+### Testing Methods and Procedures
+
+The program was tested using a comprehensive unit test suite with 8 test cases covering all major game functionality:
+
+#### Test Cases (8 total - exceeds minimum requirement of 7):
+
+1. **Game Initialization Test**
+   - **Input**: Create game with default parameters (40x20, Easy difficulty)
+   - **Expected Output**: Game state is RUNNING, score is 0, snake has 3 segments
+   - **Result**: ✓ Passed - Verifies default state initialization
+
+2. **Snake Movement Test**
+   - **Input**: Set direction RIGHT, call update()
+   - **Expected Output**: Snake head moves one position to the right
+   - **Result**: ✓ Passed - Confirms movement mechanics work correctly
+
+3. **Direction Change Test**
+   - **Input**: Set direction UP, then attempt to set DOWN immediately
+   - **Expected Output**: Direction remains UP (reversal prevention)
+   - **Result**: ✓ Passed - Validates direction queuing and reversal prevention
+
+4. **Wall Collision Test**
+   - **Input**: Move snake to left wall boundary (10x10 game)
+   - **Expected Output**: Game state changes to GAME_OVER
+   - **Result**: ✓ Passed - Confirms wall collision detection
+
+5. **Fruit Eating Test**
+   - **Input**: Move snake to fruit position
+   - **Expected Output**: Score increases by 10, snake length increases
+   - **Result**: ✓ Passed - Validates scoring and growth mechanics
+
+6. **Pause Functionality Test**
+   - **Input**: Set state to PAUSED, call update()
+   - **Expected Output**: Snake position unchanged (game paused)
+   - **Result**: ✓ Passed - Confirms pause mechanism works
+
+7. **Difficulty Settings Test**
+   - **Input**: Create games with EASY and HARD difficulty
+   - **Expected Output**: EASY has 200ms speed, HARD has 100ms speed
+   - **Result**: ✓ Passed - Verifies difficulty affects game speed
+
+8. **Self Collision Test**
+   - **Input**: Move snake in a pattern that causes self-collision
+   - **Expected Output**: Collision detection mechanism is triggered
+   - **Result**: ✓ Passed - Confirms self-collision detection
+
+### Running Tests
 
 ```bash
-chmod +x build.sh
-./build.sh
-```
-
-This script will:
-1. Create a `build` directory
-2. Run CMake to generate build files
-3. Compile the project using make
-4. Run tests automatically
-
-#### Method 2: Manual Build
-
-```bash
-# Create build directory
-mkdir build
 cd build
-
-# Generate build files
-cmake ..
-
-# Compile
-make
-
-# Optional: Run tests
 make test_snake
 ./test_snake
 ```
 
-### Build Output
+**Test Output Example**:
+```
+Running game tests...
 
-After successful compilation, you will find:
-- `build/snake`: Main game executable
-- `build/test_snake`: Test executable
+Testing game initialization...
+✓ Game initialization test passed
+Testing snake movement...
+✓ Snake movement test passed
+...
+✓ All tests passed!
+```
 
-### Running the Game
+### Memory Checking
+
+Using valgrind for memory leak detection:
 
 ```bash
-# From build directory
-./snake
-
-# Or from project root
-./build/snake
-```
-
-### Troubleshooting
-
-**CMake not found**: Install CMake using your package manager
-- macOS: `brew install cmake`
-- Linux: `sudo apt-get install cmake` (Debian/Ubuntu)
-
-**pthread errors**: Usually pthread is included by default. If not, install `libpthread-dev` (Linux)
-
-**Terminal size issues**: Ensure your terminal is at least 42x22 characters (40x20 game + borders)
-
----
-
-## Command-Line Switches Description
-
-The game supports the following command-line options:
-
-### `--help` or `-h`
-
-**Description**: Displays a help message with usage information, available options, controls, and game rules.
-
-**Usage**:
-```bash
-./snake --help
-./snake -h
-```
-
-**Output**: Shows:
-- Program description
-- Available command-line options
-- Game controls
-- Game rules
-
-### `--difficulty <level>` or `-d <level>`
-
-**Description**: Sets the game difficulty level, which affects the game speed.
-
-**Arguments**:
-- `easy`: Slower game speed (default)
-- `hard`: Faster game speed
-
-**Usage**:
-```bash
-./snake --difficulty hard
-./snake -d easy
-```
-
-**Default**: `easy`
-
-### `--width <n>` or `-w <n>`
-
-**Description**: Sets the width of the game board in characters.
-
-**Arguments**: Positive integer (recommended: 20-80)
-
-**Usage**:
-```bash
-./snake --width 50
-./snake -w 30
-```
-
-**Default**: `40`
-
-**Constraints**: Must be positive and fit within terminal width
-
-### `--height <n>` or `-h <n>`
-
-**Description**: Sets the height of the game board in characters.
-
-**Arguments**: Positive integer (recommended: 10-30)
-
-**Usage**:
-```bash
-./snake --height 25
-./snake -h 15
-```
-
-**Default**: `20`
-
-**Constraints**: Must be positive and fit within terminal height
-
-### Combined Options
-
-You can combine multiple options:
-
-```bash
-./snake --difficulty hard --width 50 --height 25
-./snake -d hard -w 50 -h 25
-```
-
-### Option Parsing
-
-- Options can be specified in any order
-- If conflicting options are provided, the last one takes precedence
-- Invalid values result in error messages and program termination
-
----
-
-## How to Use the Application
-
-### Starting the Game
-
-1. Compile the game (see [How to Compile and Run](#how-to-compile-and-run))
-2. Run the executable: `./build/snake`
-3. The game will start with default settings (Easy difficulty, 40x20 board)
-
-### Game Controls
-
-| Key | Action |
-|-----|--------|
-| **W** | Move snake up |
-| **A** | Move snake left |
-| **S** | Move snake down |
-| **D** | Move snake right |
-| **P** | Pause/Unpause game |
-| **Q** | Quit game |
-| **ESC** | Quit game |
-
-### Game Rules
-
-1. **Objective**: Control the snake to eat fruits (*) and grow longer
-2. **Scoring**: Each fruit consumed gives 10 points
-3. **Growth**: The snake grows by one segment after eating a fruit
-4. **Game Over Conditions**:
-   - Snake hits a wall (boundary collision)
-   - Snake hits its own tail (self-collision)
-5. **Difficulty Levels**:
-   - **Easy**: Slower movement speed, easier to control
-   - **Hard**: Faster movement speed, more challenging
-
-### Gameplay Tips
-
-- Plan your moves ahead to avoid trapping yourself
-- Use pause (P) to take breaks and plan your next moves
-- Start with Easy difficulty to learn the controls
-- The game gets more challenging as the snake grows longer
-
-### Visual Elements
-
-- **Snake**: Represented by colored segments (typically green)
-- **Fruit**: Represented by `*` character (typically red)
-- **Walls**: Represented by border characters
-- **Score**: Displayed at the top of the screen
-
-### Exiting the Game
-
-- Press **Q** or **ESC** to quit at any time
-- The game will display your final score before exiting
-- Terminal will be restored to normal mode automatically
-
----
-
-## Program Testing
-
-### Testing Methodology
-
-The project includes comprehensive unit tests and integration testing procedures.
-
-### Unit Tests
-
-Located in `tests/test_game.cpp`, the test suite includes 8 test cases:
-
-#### Test 1: Game Initialization
-- **Input**: Create Game object with width=10, height=10, difficulty=Easy
-- **Expected Output**: 
-  - Snake starts at center position
-  - Initial score is 0
-  - Game is not over
-  - Fruit is spawned at valid position
-
-#### Test 2: Snake Movement
-- **Input**: Move snake in each direction (Up, Down, Left, Right)
-- **Expected Output**: 
-  - Snake head position updates correctly
-  - Snake body follows head correctly
-  - Direction changes are applied
-
-#### Test 3: Wall Collision Detection
-- **Input**: Move snake toward wall boundary
-- **Expected Output**: 
-  - Game over flag is set when snake hits wall
-  - Collision detected at correct boundary
-
-#### Test 4: Self Collision Detection
-- **Input**: Move snake to intersect with its own body
-- **Expected Output**: 
-  - Game over flag is set
-  - Collision detected correctly
-
-#### Test 5: Fruit Consumption
-- **Input**: Move snake to fruit position
-- **Expected Output**: 
-  - Score increases by 10
-  - Snake grows by one segment
-  - New fruit spawns at different position
-
-#### Test 6: Fruit Spawning
-- **Input**: Spawn multiple fruits
-- **Expected Output**: 
-  - Fruits spawn at valid positions (not on snake)
-  - Fruits are within game boundaries
-
-#### Test 7: Pause Functionality
-- **Input**: Toggle pause state
-- **Expected Output**: 
-  - Pause state toggles correctly
-  - Game state is preserved when paused
-
-#### Test 8: Difficulty Levels
-- **Input**: Create games with Easy and Hard difficulty
-- **Expected Output**: 
-  - Different update intervals for different difficulties
-  - Hard difficulty has faster game speed
-
-### Running Tests
-
-#### Using CTest:
-```bash
-cd build
-ctest
-```
-
-#### Running Test Executable Directly:
-```bash
-cd build
-./test_snake
-```
-
-#### Expected Test Output:
-```
-Running 8 tests...
-[PASS] Test 1: Game Initialization
-[PASS] Test 2: Snake Movement
-[PASS] Test 3: Wall Collision Detection
-[PASS] Test 4: Self Collision Detection
-[PASS] Test 5: Fruit Consumption
-[PASS] Test 6: Fruit Spawning
-[PASS] Test 7: Pause Functionality
-[PASS] Test 8: Difficulty Levels
-
-All tests passed (8/8)
-```
-
-### Integration Testing
-
-#### Test Scenario 1: Full Game Session
-- **Procedure**: 
-  1. Start game with default settings
-  2. Play until game over
-  3. Verify score calculation
-  4. Verify game over detection
-- **Expected**: Game runs smoothly, score increments correctly, game ends properly
-
-#### Test Scenario 2: Thread Synchronization
-- **Procedure**: 
-  1. Start game
-  2. Rapidly change directions
-  3. Pause/unpause multiple times
-  4. Verify no race conditions or deadlocks
-- **Expected**: All threads synchronize correctly, no crashes or hangs
-
-#### Test Scenario 3: Terminal Interaction
-- **Procedure**: 
-  1. Start game in different terminal sizes
-  2. Verify rendering adapts correctly
-  3. Test all control keys
-- **Expected**: Game adapts to terminal size, all controls work
-
-### Memory Leak Testing
-
-#### Using Valgrind:
-```bash
-cd build
 valgrind --leak-check=full --show-leak-kinds=all ./snake
 ```
 
-#### Expected Results:
-- **No memory leaks**: All allocated memory is properly freed
-- **No invalid reads/writes**: All memory accesses are valid
-- **RAII compliance**: Destructors properly clean up resources
+**Expected Result**: No memory leaks (all resources properly managed via RAII)
 
-#### Valgrind Output Example:
+**Sample valgrind output** (should show):
+- No definitely lost blocks
+- No indirectly lost blocks
+- All heap blocks freed
+
+### Integration Testing
+
+Manual testing scenarios performed:
+
+1. **Normal Gameplay**: Play game, eat fruits, verify score increases
+2. **Collision Testing**: Intentionally hit walls and tail, verify game over
+3. **Pause/Resume**: Pause during gameplay, verify state preservation
+4. **Difficulty Switching**: Test both difficulty levels, verify speed difference
+5. **Terminal Resize**: Verify game handles terminal size changes gracefully
+6. **Rapid Input**: Test rapid key presses, verify no input loss
+7. **Long Gameplay**: Extended play session to verify no memory leaks or crashes
+
+## Build System
+
+### CMakeLists.txt
+
+- **Minimum CMake**: 3.10
+- **C++ Standard**: C++17
+- **Libraries**: Threads (pthread)
+- **Executables**:
+  - `snake`: Main game executable
+  - `test_snake`: Test executable
+
+### Build Process
+
+```bash
+mkdir build
+cd build
+cmake ..
+make
 ```
-==12345== HEAP SUMMARY:
-==12345==     in use at exit: 0 bytes in 0 blocks
-==12345==   total heap usage: X allocs, X frees, Y bytes allocated
-==12345==
-==12345== All heap blocks were freed -- no leaks are possible
-```
 
-### Performance Testing
+## Command Line Arguments
 
-- **Frame Rate**: Render thread maintains consistent frame rate
-- **Input Responsiveness**: Input thread responds to keys within acceptable latency
-- **Game Loop**: Main thread maintains consistent game tick intervals
-
----
+- `--help, -h`: Display help message
+- `--difficulty, -d <easy|hard>`: Set difficulty level
+- `--width, -w <number>`: Set game width (10-100)
+- `--height, -h <number>`: Set game height (10-50)
 
 ## Comparison of Implemented Algorithms
 
 ### Difficulty Level Comparison
 
+
+The game implements two difficulty levels with different algorithms for game speed:
+
+#### Easy Difficulty Algorithm
+- **Update Interval**: 200ms per game tick
+- **Algorithm**: Slower update rate allows more time for player reaction
+- **Use Case**: Suitable for beginners or casual gameplay
+- **Performance**: Lower CPU usage, smoother gameplay for new players
+
+#### Hard Difficulty Algorithm
+- **Update Interval**: 100ms per game tick
+- **Algorithm**: Faster update rate increases challenge and requires quicker reflexes
+- **Use Case**: Suitable for experienced players seeking challenge
+- **Performance**: Higher CPU usage, more demanding gameplay
+
+**Comparison Results**:
+- Easy mode: Average game duration longer, higher scores achievable
+- Hard mode: Faster gameplay, requires better reaction time, more challenging
+- Both modes use identical collision detection and game logic algorithms
+- Only timing differs, demonstrating algorithm flexibility
+
+### Collision Detection Algorithm
+
+The collision detection uses a simple but efficient algorithm:
+- **Wall Collision**: O(1) - Direct boundary check
+- **Self Collision**: O(n) - Linear search through snake body segments
+- **Optimization**: Early termination when collision detected
+
+### Threading Algorithm Comparison
+
+Three different threading approaches are used:
+
+1. **Input Thread**: Event-driven, non-blocking I/O
+2. **Render Thread**: Time-driven, ~60 FPS rendering
+3. **Game Logic Thread**: Game-speed-driven, difficulty-dependent timing
+
+Each thread uses appropriate synchronization primitives for its use case.
+
+## Code Quality
+
+### Design Patterns
+
+- **RAII**: Automatic resource management (terminal mode, threads)
+- **Thread-safe Singleton-like**: Game state with mutex protection
+- **Command Pattern**: Input commands queued before execution
+
+### Best Practices
+
+- Mutex-protected shared state
+- Atomic operations for frequently accessed data
+- Proper thread cleanup in destructors
+- Exception safety through RAII
+
+## Language Extensions Used
+
+1. **VLA (Variable Length Arrays)**: Used in `render.cpp` for dynamic buffer allocation
+   - C99 extension supported by GCC/Clang
+   - Demonstrates language extension usage as required
+
+2. **POSIX Extensions**:
+   - `termios.h`: Terminal control
+   - `sys/ioctl.h`: Terminal size detection
+   - `unistd.h`: POSIX file I/O
+
+3. **C++17 Extensions**:
+   - `std::atomic`: Lock-free operations
+   - `std::mutex` and `std::condition_variable`: Thread synchronization
+
+## Known Limitations
+
+1. **Terminal Size**: Game assumes minimum terminal size (may need adjustment)
+2. **Random Fruit**: Fruit position is random, may occasionally spawn in inconvenient locations
+3. **Platform**: Designed for POSIX systems (Linux, macOS, WSL)
+
+## Future Enhancements
+
+Potential improvements:
+- High score persistence
+- Multiple fruit types with different point values
+- Obstacles/walls in the game field
+- Network multiplayer support
+- Configurable color schemes
+
+
+## References
+
+- POSIX Terminal Interface: `man termios`
+- ANSI Escape Sequences: ECMA-48 standard
+- C++17 Standard: ISO/IEC 14882:2017
+- CMake Documentation: https://cmake.org/documentation/
+=======
 #### Easy Difficulty
 - **Update Interval**: ~200ms per game tick
 - **Characteristics**: 
@@ -675,16 +545,3 @@ valgrind --leak-check=full --show-leak-kinds=all ./snake
 
 - **POSIX**: Required for terminal control and I/O
 - **pthread**: Required for threading support (via C++ std::thread)
-
-### Platform Compatibility
-
-- ✅ **Linux**: Fully supported
-- ✅ **macOS**: Fully supported
-- ✅ **WSL (Windows)**: Supported
-- ❌ **Native Windows**: Not supported (requires POSIX)
-
----
-
-**Document Version**: 1.0  
-**Last Updated**: [TODO: Update date]
-

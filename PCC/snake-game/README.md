@@ -24,7 +24,6 @@ A classic Snake game implementation in C++ using POSIX terminals with multi-thre
 ### Using the build script:
 ```bash
 ./build.sh
-```
 
 ### Manual build:
 ```bash
@@ -38,6 +37,7 @@ make
 
 ```bash
 # Run with default settings (Easy difficulty, 40x20)
+
 ./build/snake
 
 # Run with custom difficulty
@@ -48,7 +48,6 @@ make
 
 # Show help
 ./build/snake --help
-```
 
 ## Command-Line Options
 
